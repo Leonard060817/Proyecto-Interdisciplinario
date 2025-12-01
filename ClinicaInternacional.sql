@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: 192.168.30.23
--- Tiempo de generación: 05-11-2025 a las 21:43:21
+-- Tiempo de generación: 01-12-2025 a las 23:02:08
 -- Versión del servidor: 8.0.18
 -- Versión de PHP: 8.2.26
 
@@ -21,47 +21,6 @@ SET time_zone = "+00:00";
 -- Base de datos: `ClinicaInternacional`
 --
 
-DELIMITER $$
---
--- Procedimientos
---
-CREATE DEFINER=`root`@`192.168.30.%` PROCEDURE `sp_actualizarTratamiento` (IN `p_id_historia` INT, IN `p_nuevo_tratamiento` TEXT)   BEGIN
-    UPDATE Historias_Clinicas
-    SET tratamiento = p_nuevo_tratamiento
-    WHERE id_historia = p_id_historia;
-END$$
-
-CREATE DEFINER=`root`@`192.168.30.%` PROCEDURE `sp_agendarTurno` (IN `p_id_paciente` INT, IN `p_id_medico` INT, IN `p_fecha` DATE, IN `p_hora` TIME)   BEGIN
-    INSERT INTO Turnos (id_paciente, id_medico, fecha, hora, estado)
-    VALUES (p_id_paciente, p_id_medico, p_fecha, p_hora, 'pendiente');
-END$$
-
-CREATE DEFINER=`root`@`192.168.30.%` PROCEDURE `sp_cancelarTurno` (IN `p_id_turno` INT)   BEGIN
-    UPDATE Turnos 
-    SET estado = 'cancelado'
-    WHERE id_turno = p_id_turno;
-END$$
-
-CREATE DEFINER=`root`@`192.168.30.%` PROCEDURE `sp_generarHistoria` (IN `p_id_paciente` INT, IN `p_id_medico` INT, IN `p_diagnostico` TEXT, IN `p_tratamiento` TEXT, IN `p_fecha` DATE)   BEGIN
-    INSERT INTO Historias_Clinicas (id_paciente, id_medico, diagnostico, tratamiento, fecha)
-    VALUES (p_id_paciente, p_id_medico, p_diagnostico, p_tratamiento, p_fecha);
-END$$
-
-CREATE DEFINER=`root`@`192.168.30.%` PROCEDURE `sp_reporteMensualIngresos` (IN `p_anio` INT, IN `p_mes` INT)   BEGIN
-    SELECT 
-        M.id_medico,
-        M.nombre AS nombre_medico,
-        COUNT(T.id_turno) AS cantidad_turnos
-    FROM Turnos T
-    INNER JOIN Medicos M ON T.id_medico = M.id_medico
-    WHERE YEAR(T.fecha) = p_anio AND MONTH(T.fecha) = p_mes
-          AND T.estado = 'completado'
-    GROUP BY M.id_medico, M.nombre
-    ORDER BY cantidad_turnos DESC;
-END$$
-
-DELIMITER ;
-
 -- --------------------------------------------------------
 
 --
@@ -76,24 +35,6 @@ CREATE TABLE `Historias_Clinicas` (
   `tratamiento` text,
   `fecha` date NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
---
--- Disparadores `Historias_Clinicas`
---
-DELIMITER $$
-CREATE TRIGGER `trg_logEliminarHistoria` BEFORE DELETE ON `Historias_Clinicas` FOR EACH ROW BEGIN
-    INSERT INTO Turnos (id_paciente, id_medico, fecha, hora, estado)
-    VALUES (OLD.id_paciente, OLD.id_medico, CURDATE(), CURTIME(), 'historia_eliminada');
-END
-$$
-DELIMITER ;
-DELIMITER $$
-CREATE TRIGGER `trg_registrarAccesoHistorial` AFTER INSERT ON `Historias_Clinicas` FOR EACH ROW BEGIN
-    INSERT INTO Turnos (id_paciente, id_medico, fecha, hora, estado)
-    VALUES (NEW.id_paciente, NEW.id_medico, NEW.fecha, '00:00:00', 'registrado');
-END
-$$
-DELIMITER ;
 
 -- --------------------------------------------------------
 
@@ -139,26 +80,6 @@ CREATE TABLE `Turnos` (
   `hora` time NOT NULL,
   `estado` varchar(50) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
-
---
--- Disparadores `Turnos`
---
-DELIMITER $$
-CREATE TRIGGER `trg_ActualizarDisponibilidadMedico` AFTER INSERT ON `Turnos` FOR EACH ROW BEGIN
-    UPDATE Medicos
-    SET disponibilidad = CONCAT('Ocupado en turno el ', NEW.fecha, ' a las ', NEW.hora)
-    WHERE id_medico = NEW.id_medico;
-END
-$$
-DELIMITER ;
-DELIMITER $$
-CREATE TRIGGER `trg_actualizarEstadoTurno` BEFORE UPDATE ON `Turnos` FOR EACH ROW BEGIN
-    IF NEW.fecha < CURDATE() AND NEW.estado = 'pendiente' THEN
-        SET NEW.estado = 'completado';
-    END IF; 
-END
-$$
-DELIMITER ;
 
 -- --------------------------------------------------------
 
